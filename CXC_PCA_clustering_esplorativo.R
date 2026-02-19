@@ -292,6 +292,20 @@ cor(get_dist(scaled_data, method = "pearson"), cophenetic(hierarchical_partition
 
 
 
+# usa solo le prime 5 PC (come prima)
+dist_rows <- dist(pca_coords[, 1:5], method = "euclidean")
+
+hc_rows <- hclust(dist_rows, method = "average")
+
+clusters_rows <- cutree(hc_rows, k = 2)
+
+
+
+
+
+
+
+
 # 1. Clustering con metodo Ward.D2
 dist_rows <- dist(subset(data_log_df, select = -Patient))
 hc_rows <- hclust(dist_rows, method = "ward.D2") 
