@@ -7,12 +7,13 @@ pacman::p_load(
   FactoMineR,
   factoextra,
   cluster,
-  clValid
+  clValid,
+  pvclust # questo magari lo uso alla fine
 )
 
 # Setting the directories
 
-work_dir <- "/Users/lorenzosisti/Cytokine_clusters/"
+#work_dir <- "/Users/lorenzosisti/Cytokine_clusters/"
 
 # Functions (Questa parte la devo modificare bene, vorrei creare una pipeline decente che permetta automaticamente di sostituire i valori problematici.)
 
@@ -53,11 +54,11 @@ check_OOR_columns <- function(df) {
 
 # Importing the citokine files (manually cleaned from Excel)
 
-ck_patients <- read_xlsx(paste(work_dir, "ck_patients.xlsx", sep = ""))
-ck_ctrl <- read_xlsx(paste(work_dir, "ck_ctrl.xlsx", sep = ""))
+ck_patients <- read_xlsx("ck_patients.xlsx")
+ck_ctrl <- read_xlsx("ck_ctrl.xlsx")
 
-check_OOR_columns(ck_patients)
-check_OOR_columns(ck_ctrl)
+#check_OOR_columns(ck_patients)
+#check_OOR_columns(ck_ctrl)
 
 # Tolgo la citochina problematica per valori OOR
 
@@ -78,7 +79,7 @@ merged_df$`ENA-78/CXCL5` <- NA
 merged_df <- merged_df %>% select(-c(Gender, Age, Date_birth,Diagnosis, `ENA-78/CXCL5`))
 
 
-# Calcolo una media per i valori duplicati facendo un group_by (questa cosa si può sostituire con una funzione if ci sono pazienti duplicati then fai una media)
+# Calcolo una media per i valori duplicati facendo un group_by 
 avg_df <- merged_df %>%
   group_by(Patient) %>%
   summarise(
@@ -87,13 +88,8 @@ avg_df <- merged_df %>%
   ) %>% 
   ungroup()  # chiude il contesto di gruppo
 
-#avg_df<- merged_df
 data_log <- avg_df %>%
   mutate(across(where(is.numeric), ~ log2(. + 1)))
-
-
-# Trasformazione log2 
-#data_log <- log2(avg_df + 1)
 
 # converto in data.frame
 data_log_df <- as.data.frame(data_log)
@@ -121,9 +117,6 @@ percent_var
 cum_percent_var <- cumsum(percent_var)
 
 cum_percent_var
-
-#data_log$Patient <- rownames(pca_coords)
-#pca_coords$Institute <- pca_df_merge$institute
 
 # soglia per outlier (1 deviazioni standard)
 sd_mult <- 1
@@ -193,129 +186,22 @@ for (nm in names(prova)) {
 
 ###############
 
-# Questa parte qui sotto va rifatta bene, potrebbe essere ottimizzata 
-
-clmethods <- c("hierarchical","kmeans")
-clmetrics <- c("euclidean","correlation")
-agglos <- c("ward","single","complete","average")
-
-res <- list()
-
-for (m in clmetrics) {
-  # kmeans non usa "method", quindi ha senso separare
-  res[[paste0("kmeans_", m)]] <- clValid(
-    pca_coords, nClust = 2:6,
-    clMethods = "kmeans",
-    validation = "internal",
-    metric = m
-  )
-  
-  for (a in agglos) {
-    res[[paste0("hier_", a, "_", m)]] <- clValid(
-      pca_coords, nClust = 2:6,
-      clMethods = "hierarchical",
-      validation = "internal",
-      metric = m,
-      method = a
-    )
-  }
-}
-
-summary(res)
-
-###########
-# 1. Estraiamo le matrici delle metriche da ogni oggetto clValid
-# Usiamo slot(x, "measures") perché clValid è un oggetto S4
-list_of_df <- lapply(names(res), function(name) {
-  # Estraiamo la matrice delle misure (metriche x numero cluster)
-  mat <- res[[name]]@measures
-  
-  # La trasformiamo in dataframe "lungo" per renderla leggibile
-  df <- as.data.frame(mat)
-  df$Metric_Type <- rownames(mat)
-  df$Configuration <- name
-  
-  return(df)
-})
-
-# 2. Uniamo tutto in un unico grande dataframe
-final_results <- do.call(rbind, list_of_df)
-
-# 3. Riordiniamo le colonne per leggibilità
-final_results <- final_results[, c("Configuration", "Metric_Type", "2", "3", "4", "5", "6")]
-
-# Visualizziamo il risultato
-print(final_results)
-
-############
-
-
-
-
-# esempio: guarda un oggetto
-res[["hier_ward_euclidean"]]
-summary(res[["hier_ward_euclidean"]])
-
-
-### Clustering based on euclidean distance between observtions
-
-# Partitioning method: k-means with silhouette evaluation
-k_means_partitioning <- fviz_nbclust(pca_coords, kmeans, method = "silhouette", k.max = 20) 
-
-# Hierarchical method (AGNES, average linkage)
-hierarchical_partitioning <- agnes(pca_coords, metric = "euclidean", stand = FALSE, method = "average")
-fviz_dend(hierarchical_partitioning, show_labels = TRUE)
-
-cophenetic_distance <- cophenetic(hierarchical_partitioning) # Evaluate goodness of clustering: cophenetic correlation
-cor(dist(pca_coords, method = "euclidean"), cophenetic_distance)
-
-# In our case, average linkage shows highest cophenetic correlation and was therefore chosen as the default linking method (this is true for all the clustering analysis)
-
-### Clustering based on Pearson correlation distance
-
-# Partitioning method: k-means with Pearson-based distance
-k_means_partitioning_pearson <- fviz_nbclust(pca_coords, kmeans, method = "silhouette", diss = get_dist(pca_coords, method = "pearson"), k.max = 20) #La matrice delle distanze tra scaled_data è creata usando la metrica euclidea
-
-# Hierarchical method (average linkage)
-# We don't use AGNES anymore because it does not support correlation-based distances
-dissimilarity_matrix <- get_dist(pca_coords, method = "pearson")
-hierarchical_partitioning_pearson <- hclust(dissimilarity_matrix, method = "average")
-fviz_dend(hierarchical_partitioning_pearson, show_labels = FALSE)
-
-# Cophenetic correlation for Pearson-based clustering
-cor(get_dist(scaled_data, method = "pearson"), cophenetic(hierarchical_partitioning_pearson))
-
-
-##############
-
-
-
-
-
-# usa solo le prime 5 PC (come prima)
+# usa solo le prime 5 PC (spiegano 75% della varianza)
 dist_rows <- dist(pca_coords[, 1:5], method = "euclidean")
 
 hc_rows <- hclust(dist_rows, method = "average")
 
 clusters_rows <- cutree(hc_rows, k = 2)
 
-
-
-
-
-
-
-
-# 1. Clustering con metodo Ward.D2
-dist_rows <- dist(subset(data_log_df, select = -Patient))
-hc_rows <- hclust(dist_rows, method = "ward.D2") 
+### QUI DEVO INSERIRE UNA FUNZIONE CHE MI CALCOLI IL MIGLIOR MODO DI AGGLOMERARE I DATI (PARTENDO DALLA SILHOUETTE)
+### CON LA PCA E PRENDENDO LE PRIME 5 PC LA SILHOUETTE AUMENTA DA 0.27 A 0.38, QUINDI BENE
 
 dist_cols <- dist(t(subset(data_log_df, select = -Patient)))
 hc_cols <- hclust(dist_cols, method = "ward.D2") 
 
 # 2. Definizione dei tagli (k rimane lo stesso)
-clusters_rows <- cutree(hc_rows, k = 3)
-clusters_cols <- cutree(hc_cols, k = 11)
+#clusters_rows <- cutree(hc_rows, k = 3)
+clusters_cols <- cutree(hc_cols, k = 11) # ANCORA DEVO CAPIRE A COSA SERVA QUESTO, AD OGNI MODO POI RIPETO LA PIPELINE PER CAPIRE IL MIGLIOR CLUSTERING SULLE COLONNE (CITOCHINE)
 
 # 3. Preparazione annotazioni 
 annotation_row <- data.frame(
