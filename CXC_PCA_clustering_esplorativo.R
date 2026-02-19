@@ -109,6 +109,19 @@ fviz_eig(pca_res)
 
 # coordinate dei punti per poter assegnare le etichette in modo più mirato
 pca_coords <- as.data.frame(pca_res$x)
+
+# varianza spiegata
+var_explained <- (pca_res$sdev)^2
+
+# percentuale
+percent_var <- var_explained / sum(var_explained) * 100
+
+percent_var
+
+cum_percent_var <- cumsum(percent_var)
+
+cum_percent_var
+
 #data_log$Patient <- rownames(pca_coords)
 #pca_coords$Institute <- pca_df_merge$institute
 
@@ -149,9 +162,35 @@ clmethods <- c("hierarchical","kmeans")
 clmetric <- c("euclidean","correlation")
 agglomeration_method <- c("ward","single","complete","average")
 
-intern <- clValid(pca_coords, nClust = 2:6, clMethods = clmethods, validation = "internal", method = "ward")
+intern <- clValid(pca_coords[, 1:5], nClust = 2:6, clMethods = clmethods, validation = "internal", method = "ward")
 
 summary(intern)
+
+prova <- list()
+
+prova[["kmeans"]] <- clValid(
+  pca_coords[, 1:5], nClust = 2:6,
+  clMethods = "kmeans",
+  validation = "internal",
+  metric = "euclidean"
+)
+
+for (i in agglomeration_method) {
+  prova[[paste0("hier_", i)]] <- clValid(
+    pca_coords[, 1:5], nClust = 2:6,
+    clMethods = "hierarchical",
+    validation = "internal",
+    metric = "euclidean",
+    method = i
+  )
+}
+
+# stampare tutti
+for (nm in names(prova)) {
+  cat("\n====================\n", nm, "\n")
+  print(summary(prova[[nm]]))
+}
+
 ###############
 
 # Questa parte qui sotto va rifatta bene, potrebbe essere ottimizzata 
