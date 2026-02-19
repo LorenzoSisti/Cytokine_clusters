@@ -6,7 +6,8 @@ pacman::p_load(
   janitor,
   FactoMineR,
   factoextra,
-  cluster
+  cluster,
+  clValid
 )
 
 # Setting the directories
@@ -141,6 +142,52 @@ ggsave("BIORAD_Citokynes/PCA_before_remove_BatchEffect_log2.png", width = 8, hei
 
 
 ###############
+
+# Cose sul clustering con clValid che aggiungo in data 19/02
+
+clmethods <- c("hierarchical","kmeans")
+clmetric <- c("euclidean","correlation")
+agglomeration_method <- c("ward","single","complete","average")
+
+intern <- clValid(pca_coords, nClust = 2:6, clMethods = clmethods, validation = "internal", method = "ward")
+
+summary(intern)
+###############
+
+# Questa parte qui sotto va rifatta bene, potrebbe essere ottimizzata 
+
+clmethods <- c("hierarchical","kmeans")
+clmetrics <- c("euclidean","correlation")
+agglos <- c("ward","single","complete","average")
+
+res <- list()
+
+for (m in clmetrics) {
+  # kmeans non usa "method", quindi ha senso separare
+  res[[paste0("kmeans_", m)]] <- clValid(
+    pca_coords, nClust = 2:6,
+    clMethods = "kmeans",
+    validation = "internal",
+    metric = m
+  )
+  
+  for (a in agglos) {
+    res[[paste0("hier_", a, "_", m)]] <- clValid(
+      pca_coords, nClust = 2:6,
+      clMethods = "hierarchical",
+      validation = "internal",
+      metric = m,
+      method = a
+    )
+  }
+}
+
+summary(res)
+
+# esempio: guarda un oggetto
+res[["hier_ward_euclidean"]]
+summary(res[["hier_ward_euclidean"]])
+
 
 ### Clustering based on euclidean distance between observtions
 
