@@ -184,6 +184,35 @@ for (m in clmetrics) {
 
 summary(res)
 
+###########
+# 1. Estraiamo le matrici delle metriche da ogni oggetto clValid
+# Usiamo slot(x, "measures") perché clValid è un oggetto S4
+list_of_df <- lapply(names(res), function(name) {
+  # Estraiamo la matrice delle misure (metriche x numero cluster)
+  mat <- res[[name]]@measures
+  
+  # La trasformiamo in dataframe "lungo" per renderla leggibile
+  df <- as.data.frame(mat)
+  df$Metric_Type <- rownames(mat)
+  df$Configuration <- name
+  
+  return(df)
+})
+
+# 2. Uniamo tutto in un unico grande dataframe
+final_results <- do.call(rbind, list_of_df)
+
+# 3. Riordiniamo le colonne per leggibilità
+final_results <- final_results[, c("Configuration", "Metric_Type", "2", "3", "4", "5", "6")]
+
+# Visualizziamo il risultato
+print(final_results)
+
+############
+
+
+
+
 # esempio: guarda un oggetto
 res[["hier_ward_euclidean"]]
 summary(res[["hier_ward_euclidean"]])
