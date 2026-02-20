@@ -17,48 +17,11 @@ pacman::p_load(
 
 # Functions (Questa parte la devo modificare bene, vorrei creare una pipeline decente che permetta automaticamente di sostituire i valori problematici.)
 
-check_OOR_columns <- function(df) {
-  
-  for (j in seq_along(df)) {
-    col <- df[[j]]
-    
-    if (any(grepl("^OOR\\s*[<>]", 
-                  toupper(trimws(as.character(col)))))) {
-      cat("⚠️  Colonna con OOR:", names(df)[j], "\n")
-    }
-  }
-  
-}
-
-check_OOR_columns <- function(df) {
-  
-  threshold <- (nrow(df) / 2) + 1
-  
-  for (j in seq_along(df)) {
-    col <- df[[j]]
-    
-    is_oor <- grepl("^OOR\\s*[<>]",
-                    toupper(trimws(as.character(col))))
-    
-    n_oor <- sum(is_oor, na.rm = TRUE)
-    
-    if (n_oor > threshold) {
-      cat("⚠️  Colonna con OOR > (nrow/2)+1:", 
-          names(df)[j],
-          "| n_OOR =", n_oor, "\n")
-    }
-  }
-  
-}
-
 
 # Importing the citokine files (manually cleaned from Excel)
 
 ck_patients <- read_xlsx("ck_patients.xlsx")
 ck_ctrl <- read_xlsx("ck_ctrl.xlsx")
-
-#check_OOR_columns(ck_patients)
-#check_OOR_columns(ck_ctrl)
 
 # Tolgo la citochina problematica per valori OOR
 
@@ -195,6 +158,69 @@ clusters_rows <- cutree(hc_rows, k = 2)
 
 ### QUI DEVO INSERIRE UNA FUNZIONE CHE MI CALCOLI IL MIGLIOR MODO DI AGGLOMERARE I DATI (PARTENDO DALLA SILHOUETTE)
 ### CON LA PCA E PRENDENDO LE PRIME 5 PC LA SILHOUETTE AUMENTA DA 0.27 A 0.38, QUINDI BENE
+
+
+
+######################### 
+### ORA FACCIO UN CLUSTERING SULLE COLONNE 
+########################
+
+
+X_cols <- data_log_df %>%
+  select(-Patient) %>%  # togli la colonna testo
+  as.matrix() %>%
+  t()
+
+X_cols_scaled <- t(scale(t(X_cols)))
+
+
+prova_cols <- list()
+agglomeration_method <- c("ward","single","complete","average")
+
+# kmeans
+prova_cols[["kmeans"]] <- clValid(
+  X_cols_scaled,
+  nClust = 2:12,
+  clMethods = "kmeans",
+  validation = "internal",
+  metric = "euclidean"
+)
+
+# hierarchical con metodi diversi
+for (i in agglomeration_method) {
+  prova_cols[[paste0("hier_", i)]] <- clValid(
+    X_cols_scaled,
+    nClust = 2:12,
+    clMethods = "hierarchical",
+    validation = "internal",
+    metric = "euclidean",
+    method = i
+  )
+}
+
+for (nm in names(prova_cols)) {
+  cat("\n====================\n", nm, "\n")
+  print(summary(prova_cols[[nm]]))
+}
+
+### proviamo la correlazione per evitare variazioni di scala assoluta
+
+cor_cluster <- clValid(
+  X_cols,
+  nClust = 2:12,
+  clMethods = "hierarchical",
+  validation = "internal",
+  metric = "correlation",
+  method = "average"
+)
+
+summary(cor_cluster)
+
+dist_cols <- dist(X_cols_scaled)
+hc_cols <- hclust(dist_cols, method = "average")
+clusters_cols <- cutree(hc_cols, k = 2)
+
+
 
 dist_cols <- dist(t(subset(data_log_df, select = -Patient)))
 hc_cols <- hclust(dist_cols, method = "ward.D2") 
