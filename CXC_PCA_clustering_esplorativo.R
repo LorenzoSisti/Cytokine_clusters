@@ -156,6 +156,19 @@ hc_rows <- hclust(dist_rows, method = "average")
 
 clusters_rows <- cutree(hc_rows, k = 2)
 
+### ora senza pca
+
+X_rows <- data_log_df %>%
+  select(-Patient) %>%  # togli la colonna testo
+  as.matrix() %>%
+  scale()
+
+dist_rows <- dist(X_rows, method = "euclidean")
+
+hc_rows <- hclust(dist_rows, method = "average")
+
+clusters_rows <- cutree(hc_rows, k = 2)
+
 ### QUI DEVO INSERIRE UNA FUNZIONE CHE MI CALCOLI IL MIGLIOR MODO DI AGGLOMERARE I DATI (PARTENDO DALLA SILHOUETTE)
 ### CON LA PCA E PRENDENDO LE PRIME 5 PC LA SILHOUETTE AUMENTA DA 0.27 A 0.38, QUINDI BENE
 
@@ -220,7 +233,7 @@ dist_cols <- dist(X_cols_scaled)
 hc_cols <- hclust(dist_cols, method = "average")
 clusters_cols <- cutree(hc_cols, k = 2)
 
-
+### C'è davvero pochissima tendenza al clustering sulle colonne.
 
 dist_cols <- dist(t(subset(data_log_df, select = -Patient)))
 hc_cols <- hclust(dist_cols, method = "ward.D2") 
