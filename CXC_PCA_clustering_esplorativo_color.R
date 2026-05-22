@@ -39,31 +39,38 @@ merged_df <- bind_rows(ck_patients, ck_ctrl)
 
 merged_df$`ENA-78/CXCL5` <- NA
 
-# Genero una tabella solo colonne numeriche
-#merged_df <- pca_df_merge %>% select(-c(Sex_final, Age_final, Patient_Donor,-institute, -`Patient ID`))
-merged_df <- merged_df %>% select(-c(Gender, Age, Date_birth,Diagnosis, `ENA-78/CXCL5`))
+# 1. Creazione variabile binaria (OK)
+merged_df <- merged_df %>%
+  mutate(Diagnosis_Binary = ifelse(Diagnosis == "LLC", "LLC", "NHL"))
 
+# 2. SELEZIONE COLONNE: Rimuovi i dati sensibili, MA TIENI Diagnosis per ora
+# Ho tolto 'Diagnosis' dalla lista dei rimossi in questo passaggio
+merged_df <- merged_df %>% 
+  select(-c(Gender, Age, Date_birth, `ENA-78/CXCL5`))
 
-# Calcolo una media per i valori duplicati facendo un group_by 
+# 3. AGGREGAZIONE
 avg_df <- merged_df %>%
   group_by(Patient) %>%
   summarise(
-    across(where(is.numeric), ~ mean(.x, na.rm = TRUE)), # Mantiene i metadati non numerici
-    across(where(is.character), first)
+    # Calcola la media per tutte le citochine (numeriche)
+    across(where(is.numeric), ~ mean(.x, na.rm = TRUE)), 
+    # Conserva le diagnosi (sono colonne di testo/character)
+    Diagnosis_Binary = first(Diagnosis_Binary),
+    Diagnosis_Original = first(Diagnosis) # Ora funzionerà!
   ) %>% 
-  ungroup()  # chiude il contesto di gruppo
+  ungroup()
 
+# 4. TRASFORMAZIONE LOG2 (Escludendo le colonne di testo)
 data_log <- avg_df %>%
   mutate(across(where(is.numeric), ~ log2(. + 1)))
 
-# converto in data.frame
+# 5. CONVERSIONE IN DATAFRAME E ROWNAMES
 data_log_df <- as.data.frame(data_log)
-
-# assegno rownames
 rownames(data_log_df) <- make.unique(as.character(data_log_df$Patient))
 
 # prcomp
-pca_res <- prcomp(subset(data_log_df, select = -Patient), scale. = TRUE)
+# Esegui la PCA (escludendo le colonne di testo)
+pca_res <- prcomp(subset(data_log_df, select = -c(Patient, Diagnosis_Binary, Diagnosis_Original)), scale. = TRUE)
 
 # Scree plot (genera una percentuale di varianza spiegata)
 fviz_eig(pca_res)
@@ -95,10 +102,13 @@ outliers_lab <- outliers %>%
 p <- fviz_pca_ind(
   pca_res,
   geom = "point",
-  #col.ind = pca_coords$Institute,  # colori
-  pointsize = 2,
-  repel = TRUE,
-  mean.point = FALSE
+  col.ind = data_log_df$Diagnosis_Binary, # Colora per LLC vs NHL
+  palette = c("#E41A1C", "#377EB8"),      # Rosso per LLC, Blu per NHL (o viceversa)
+  addEllipses = TRUE,                     # Crea i cerchi di confidenza per i due gruppi
+  ellipse.type = "convex",
+  legend.title = "Gruppo Diagnostico",
+  pointsize = 2.5,
+  repel = TRUE
 )
 
 p + 
